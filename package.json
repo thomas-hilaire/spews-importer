@@ -1,0 +1,17 @@
+{
+  "name": "spews-importer",
+  "version": "0.0.0",
+  "description": "",
+  "main": "Gruntfile.js",
+  "dependencies": {
+    "amqp-ts": "^1.0.0",
+    "amqplib": "^0.4.2",
+    "grunt": "^1.0.1",
+    "grunt-ts": "^5.5.1"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
