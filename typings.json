@@ -5,7 +5,9 @@
     "bluebird": "registry:npm/bluebird#3.3.4+20160531224558"
   },
   "globalDependencies": {
+    "commander": "registry:dt/commander#2.3.0+20160317120654",
     "node": "registry:env/node#6.0.0+20160610031852",
+    "superagent": "registry:dt/superagent#1.4.0+20160317120654",
     "when": "registry:dt/when#2.4.0+20160317120654",
     "winston": "registry:dt/winston#0.0.0+20160417152829"
   }

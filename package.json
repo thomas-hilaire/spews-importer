@@ -6,8 +6,13 @@
   "dependencies": {
     "amqp-ts": "^1.0.0",
     "amqplib": "^0.4.2",
+    "bluebird": "^3.4.1",
+    "commander": "^2.9.0",
     "grunt": "^1.0.1",
-    "grunt-ts": "^5.5.1"
+    "grunt-ts": "^5.5.1",
+    "promise": "^7.1.1",
+    "superagent": "^2.0.0",
+    "superagent-bluebird-promise": "^3.0.2"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
