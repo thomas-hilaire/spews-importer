@@ -1,18 +1,30 @@
+export type UUID = string;
+export type EmailAddress = string;
+export type DateString = string;
 export type ICS = string;
 
 export interface EventMessage {
-    owner: string;
-    calendar: string;
-    ics: ICS;
+    Id: UUID;
+    CreationDate: DateString;
+    PrimaryAddress: EmailAddress;
+    CalendarId: string;
+    AppointmentId: string;
+    MimeContent: ICS;
 }
 
 export class EventMessageImpl implements EventMessage {
 
-    constructor(public owner: string, public calendar: string, public ics: ICS) {
-    }
+    constructor(
+        public Id: UUID,
+        public CreationDate: DateString,
+        public PrimaryAddress: EmailAddress,
+        public CalendarId: string,
+        public AppointmentId: string,
+        public MimeContent: ICS
+    ) {}
 }
 
-export let sample: EventMessage = new EventMessageImpl('5', 'default calendar', generateICS());
+export let sample: EventMessage = new EventMessageImpl('5', '2016-07-01T15:11:04.802465+00:00', 'usera@obm14.lng.org', 'calendarId', 'appointmentId', generateICS());
 
 export function generateICS(index?: string) {
     index = index || '1';

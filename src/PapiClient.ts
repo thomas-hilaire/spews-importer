@@ -71,9 +71,9 @@ export class PapiClient {
         this.assertBatchHasBeenStarted();
 
         return Promise.fromCallback(callback => {
-            return this.auth(post(this.papiUrl('/batches/' + this.currentBatchId + '/events/' + event.owner + '/' + event.calendar)))
+            return this.auth(post(this.papiUrl('/batches/' + this.currentBatchId + '/events/' + event.PrimaryAddress + '/' + event.PrimaryAddress)))
                 .type('text/plain')
-                .send(event.ics)
+                .send(event.MimeContent)
                 .end(callback);
         });
     }

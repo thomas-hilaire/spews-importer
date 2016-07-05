@@ -9,7 +9,6 @@ var completeConfiguration = connection.completeConfiguration();
 var exchange = connection.declareExchange("SPEWS_exchange");
 var queue = connection.declareQueue("SPEWS_EVENTS_exchange", {durable: true});
 
-
 program.version('0.0.1');
 
 program.command('generate <count> <user> <calendar>')
@@ -18,8 +17,8 @@ program.command('generate <count> <user> <calendar>')
 
     completeConfiguration.then(() => {
         for (var _i = 1; _i <= count; _i++) {
-            let event = new EventMessageImpl(user, calendar, generateICS(_i.toString()));
-            console.log('Sending event for owner: ' + event.owner);
+            let event = new EventMessageImpl('id', 'date', user, calendar, 'appointmentId', generateICS(_i.toString()));
+            console.log('Sending event for owner: ' + event.PrimaryAddress);
             exchange.send(new Amqp.Message(event));
         }
     }).then(() => {
@@ -63,16 +62,28 @@ program.command('import <count>').action((count) => {
     let alreadyImported = 0, requiredAckCount = 0;
     papiClient.startBatch().then(() => {
         queue.activateConsumer((message) => {
+            let content = message.getContent();
+
+            if (typeof content === 'string') {
+                content = JSON.parse(content);
+            }
+
             if (alreadyImported++ >= count) {
                 return;
             }
-
             requiredAckCount++;
 
-            let content = message.getContent();
-            console.log("Will import an ICS for user: ", content.owner);
+            let event = new EventMessageImpl(
+                content.Id,
+                content.CreationDate,
+                content.PrimaryAddress,
+                content.CalendarId,
+                content.AppointmentId,
+                content.MimeContent
+            );
+            console.log("Will import the following event: ", event);
 
-            papiClient.importICS(new EventMessageImpl(content.owner, content.calendar, content.ics))
+            papiClient.importICS(event)
                 .then((res: Response) => {
                     res.ok && message.ack();
                     requiredAckCount--;
