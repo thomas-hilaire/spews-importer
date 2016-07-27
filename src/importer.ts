@@ -1,13 +1,23 @@
 import * as program from "commander";
-import * as Amqp from "amqp-ts";
-import {generateICS, EventMessageImpl} from "./EventMessage";
+import * as Promise from "bluebird";
+import {generateICS, EventMessage, EventMessageImpl} from "./EventMessage";
 import {PapiClient} from "./PapiClient";
 import {Response} from 'superagent';
+import {Observable} from 'rx';
+const RxAmqpLib = require('rx-amqplib');
 
-var connection = new Amqp.Connection("amqp://localhost");
-var completeConfiguration = connection.completeConfiguration();
-var exchange = connection.declareExchange("SPEWS_exchange");
-var queue = connection.declareQueue("SPEWS_EVENTS_exchange", {durable: true});
+const config = {
+    queue: 'MIMEImporter',
+    host: 'amqp://localhost',
+    maxBatchSize: 5
+};
+
+const amqpConnection = RxAmqpLib.newConnection(config.host);
+process.on('SIGINT', () => amqpConnection.subscribe(conn => {
+    console.log('Closing amqp connection..');
+    conn.close();
+    process.exit();
+}));
 
 program.version('0.0.1');
 
@@ -15,65 +25,58 @@ program.command('generate <count> <user> <calendar>')
     .action((count, user, calendar) => {
     console.log('Generating fake date in the queue %d', count);
 
-    completeConfiguration.then(() => {
-        for (var _i = 1; _i <= count; _i++) {
-            let event = new EventMessageImpl('id', 'date', user, calendar, 'appointmentId', generateICS(_i.toString()));
-            console.log('Sending event for owner: ' + event.PrimaryAddress);
-            exchange.send(new Amqp.Message(event));
-        }
-    }).then(() => {
-        console.log('Done');
-        setTimeout(function() {
-            connection.close();
-            process.exit(0);
-        }, 500);
-    });
+    //completeConfiguration.then(() => {
+    //    for (var _i = 1; _i <= count; _i++) {
+    //        let event = new EventMessageImpl('id', 'date', user, calendar, 'appointmentId', generateICS(_i.toString()));
+    //        console.log('Sending event for owner: ' + event.PrimaryAddress);
+    //        exchange.send(new Amqp.Message(event));
+    //    }
+    //}).then(() => {
+    //    console.log('Done');
+    //    setTimeout(function() {
+    //        connection.close();
+    //        process.exit(0);
+    //    }, 500);
+    //});
 
 });
 
 program.command('list').action(() => {
     let itemCount = 0;
-    queue.bind(exchange);
-    queue.activateConsumer((message) => {
-        console.log("Item %d: ", ++itemCount, message.getContent());
-    });
+
+    amqpConnection
+        .flatMap(connection => connection.createChannel())
+        .flatMap(channel => channel.assertQueue(config.queue, { durable: true }))
+        .flatMap(reply => reply.channel.consume(config.queue, { noAck: false }))
+        .subscribe(message => console.log("Item %d: ", ++itemCount));
 });
 
 program.command('empty').action(() => {
     let itemCount = 0;
-    queue.bind(exchange);
-    queue.activateConsumer((message) => {
-        message.ack();
-        console.log('Item removed %d', ++itemCount);
-    });
+
+    amqpConnection
+        .flatMap(connection => connection.createChannel())
+        .flatMap(channel => channel.assertQueue(config.queue, { durable: true }))
+        .flatMap(reply => reply.channel.consume(config.queue, { noAck: true }))
+        .subscribe(message => console.log("Item %d removed ", ++itemCount));
 });
 
+program.command('import <apiUrl> <domainUuid>').action((apiUrl, domainUuid) => {
 
-program.command('import <count>').action((count) => {
-    console.log('Will import %d message from the queue', count);
-
-    let papiClient = new PapiClient('http://obm14/provisioning/v1/', '80a6ca8a-3fcf-c013-ad13-a6840868f923', {
+    const papiClient = new PapiClient(apiUrl, domainUuid, {
         login: 'admin0@global.virt',
         password: 'admin'
     });
 
-    queue.bind(exchange);
+    function messagesToPapiEvents(events): EventMessage[] {
+        return events.map(event => {
+            let content = JSON.parse(event.content.toString());
+            console.log('Got message %s created at %s', content.Id, content.CreationDate);
 
-    let alreadyImported = 0, requiredAckCount = 0;
-    papiClient.startBatch().then(() => {
-        queue.activateConsumer((message) => {
-            let content = message.getContent();
+            content.PrimaryAddress = 'usera@obm14.lng.org';
+            content.MimeContent = content.MimeContent.replace(/ORGANIZER.*/, 'ORGANIZER;CN=Usera display:MAILTO:usera@obm14.lng.org');
 
-            if (typeof content === 'string') {
-                content = JSON.parse(content);
-            }
-
-            if (alreadyImported++ >= count) {
-                return;
-            }
-            requiredAckCount++;
-
-            let event = new EventMessageImpl(
+            return new EventMessageImpl(
                 content.Id,
                 content.CreationDate,
                 content.PrimaryAddress,
@@ -81,19 +84,51 @@ program.command('import <count>').action((count) => {
                 content.AppointmentId,
                 content.MimeContent
             );
-            console.log("Will import the following event: ", event);
+        });
+    }
 
-            papiClient.importICS(event)
-                .then((res: Response) => {
-                    res.ok && message.ack();
-                    requiredAckCount--;
+    function runBatchOnPapi(events): Promise<string> {
+        console.log('Starting a batch');
+        return papiClient.startBatch().then(() => {
+            return papiClient.importAllICS(messagesToPapiEvents(events))
+                .then((responses: Response[]) => {
+                    responses
+                        .filter(r => !r.ok)
+                        .forEach(r => console.log('Something went wrong for the following import ics request: ', r));
 
-                    if (alreadyImported >= count && requiredAckCount == 0) {
-                        papiClient.commitBatch().then(res => process.exit(0));
-                    }
+                    console.log('Commiting a batch');
+                    return papiClient.commitBatch();
+                })
+                .then(() => {
+                    console.log('Waiting for batch to finish');
+                    return papiClient.waitForBatchSuccess();
                 });
-        }, { noAck: false });
-    });
+        });
+    }
+
+    let runCount = 0;
+    amqpConnection
+        .flatMap(connection => connection.createChannel())
+        .flatMap(channel => channel.assertQueue(config.queue, { durable: true }))
+        .flatMap(reply => {
+            reply.channel.prefetch(config.maxBatchSize);
+            return reply.channel.consume(config.queue, { noAck: false });
+        })
+        .bufferWithTimeOrCount(1000 /* ms */, config.maxBatchSize)
+        .subscribe(events => {
+            if (events.length === 0) {
+                console.log('Empty buffer, skipping it');
+                return;
+            }
+
+            runCount++;
+            console.log('Cycle %d has %d events', runCount, events.length);
+            runBatchOnPapi(events)
+                .then(message => console.log(message))
+                .then(() => {
+                    setTimeout(() => events.forEach(e => e.ack()), 1000);
+                });
+        });
 });
 
 program.command('*').action(() => {

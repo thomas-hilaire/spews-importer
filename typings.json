@@ -7,6 +7,8 @@
   "globalDependencies": {
     "commander": "registry:dt/commander#2.3.0+20160317120654",
     "node": "registry:env/node#6.0.0+20160610031852",
+    "rx": "registry:dt/rx#0.0.0+20160317120654",
+    "rx-lite": "registry:dt/rx-lite#0.0.0+20160628114230",
     "superagent": "registry:dt/superagent#1.4.0+20160317120654",
     "when": "registry:dt/when#2.4.0+20160317120654",
     "winston": "registry:dt/winston#0.0.0+20160417152829"

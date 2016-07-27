@@ -1,4 +1,4 @@
-import {post, put, Response, Request} from 'superagent';
+import {post, put, get, Response, Request} from 'superagent';
 import * as Promise from "bluebird";
 import {EventMessage} from "./EventMessage";
 import {SuperAgent} from "superagent";
@@ -60,21 +60,43 @@ export class PapiClient {
 
         return Promise.fromCallback(callback => {
                 return this.auth(put(this.papiUrl('/batches/' + this.currentBatchId +'/'))).end(callback);
-            })
-            .then(res => {
-                this.currentBatchId = undefined;
-                return res;
             });
+    }
+
+    waitForBatchSuccess(): Promise<string> {
+        this.assertBatchHasBeenStarted();
+
+        let deferred = Promise.defer<string>();
+        let callback = (err, res) => {
+            if (err) {
+                deferred.reject(err);
+            } else if (res.body.status === 'ERROR') {
+                deferred.reject('ERROR: ' + res.body.operationDone + '/' + res.body.operationCount);
+            } else if (res.body.status === 'SUCCESS') {
+                this.currentBatchId = undefined;
+                deferred.resolve('SUCCESS: ' + res.body.operationDone + '/' + res.body.operationCount);
+            } else {
+                setTimeout(() => lookForStatus(), 1000);
+            }
+        };
+        let lookForStatus = () => this.auth(get(this.papiUrl('/batches/' + this.currentBatchId +'/'))).end(callback);
+        lookForStatus();
+
+        return deferred.promise;
     }
 
     importICS(event: EventMessage): Promise<Response> {
         this.assertBatchHasBeenStarted();
 
         return Promise.fromCallback(callback => {
-            return this.auth(post(this.papiUrl('/batches/' + this.currentBatchId + '/events/' + event.PrimaryAddress + '/' + event.PrimaryAddress)))
+            return this.auth(post(this.papiUrl('/batches/' + this.currentBatchId + '/events/' + event.PrimaryAddress)))
                 .type('text/plain')
                 .send(event.MimeContent)
                 .end(callback);
         });
+    }
+
+    importAllICS(events: EventMessage[]): Promise<Response[]> {
+        return Promise.all(events.map(e => this.importICS(e)));
     }
 }
