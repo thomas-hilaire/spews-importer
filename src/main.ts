@@ -1,9 +1,22 @@
 import {AmqpConnection} from "./amqp-connection";
+import {consoleLogger} from "./logger";
 import {Importer, ImporterConfig} from "./importer";
 import {PapiClient} from "./papi-client";
 import * as program from "commander";
 
 program.version("0.0.1");
+
+program.command("test-amqp-connection")
+    .description("Verify that the tool is able to reach the amqp server")
+    .option("-h, --amqp_host <host>", "The AMQP server address [amqp://localhost]", "amqp://localhost")
+    .action(options => {
+        new AmqpConnection().create(options.amqp_host).subscribe(() => {
+            consoleLogger.warn("amqp connection OK");
+            process.exit();
+        }, (err) => {
+            consoleLogger.warn("Cannot connect to the amqp server => ", err.message);
+        });
+    });
 
 program.command("import <papiUrl> <domainUuid>")
     .description("Listen to the message-queue to import data in an OBM instance")

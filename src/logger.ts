@@ -6,3 +6,10 @@ export const logger: winston.LoggerInstance = new (winston.Logger)({
         new (winston.transports.File)({ filename: "log/import.log" }),
     ],
 });
+
+export const consoleLogger: winston.LoggerInstance = new (winston.Logger)({
+    level: "debug",
+    transports: [
+        new (winston.transports.Console)(),
+    ],
+});
