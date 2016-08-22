@@ -53,7 +53,10 @@ describe("Importer", () => {
         papiClient = new PapiClient("http://obm.org/", "my-domain", {login: "admin", password: "pwd"});
         papiClient.startBatch = sinon.stub().returns(Promise.resolve({}));
         papiClient.commitBatch = sinon.stub().returns(Promise.resolve({}));
-        papiClient.waitForBatchSuccess = sinon.stub().returns(Promise.resolve({}));
+        papiClient.waitForBatchSuccess = sinon.stub().returns(Promise.resolve({
+            message: "ok",
+            errors: [],
+        }));
     });
 
     describe("importAllEvents function", () => {
@@ -165,7 +168,10 @@ describe("Importer", () => {
                     done();
                 }, config.delayBetweenBatchMs * 3);
 
-                return Promise.resolve("success");
+                return Promise.resolve({
+                    message: "success",
+                    errors: [],
+                });
             };
 
             new Importer(papiClient, config, amqpConnectionProvider).importAllEvents();
@@ -216,7 +222,10 @@ describe("Importer", () => {
                 expect(importAllICSSpy.called).to.be.true;
                 expect(commitBatchSpy.called).to.be.true;
                 done();
-                return Promise.resolve(undefined);
+                return Promise.resolve({
+                    message: "success",
+                    errors: [],
+                });
             });
 
             config.maxBatchSize = 2;
@@ -224,6 +233,23 @@ describe("Importer", () => {
             papiClient.importAllICS = importAllICSSpy;
             papiClient.commitBatch = commitBatchSpy;
             papiClient.waitForBatchSuccess = waitForBatchSuccessSpy;
+
+            new Importer(papiClient, config, amqpConnectionProvider).importAllEvents();
+        });
+
+        it("should make multiple batches is more event messages than 'maxBatchSize' are available", (done) => {
+            config.maxBatchSize = 1;
+            config.maxBatchWaitTimeMs = 9999;
+            papiClient.importAllICS = () => Promise.resolve([]);
+
+            let batchCount = 0;
+            papiClient.commitBatch = () => {
+                batchCount++;
+                if (batchCount === allEventMessages.length) {
+                    done();
+                }
+                return Promise.resolve(undefined);
+            };
 
             new Importer(papiClient, config, amqpConnectionProvider).importAllEvents();
         });
