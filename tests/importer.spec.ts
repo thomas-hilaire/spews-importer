@@ -30,11 +30,13 @@ describe("Importer", () => {
 
         allEventMessages = [{
             ack: sinon.spy(),
+            nack: sinon.spy(),
             content: {
                 toString: () => '{"Id":"the id1","CreationDate":"a date","PrimaryAddress":"an address","CalendarId":"the calendar","AppointmentId":"an appointment","MimeContent":"the mime"}',
             },
         }, {
             ack: sinon.spy(),
+            nack: sinon.spy(),
             content: {
                 toString: () => '{"Id":"the id2","CreationDate":"a date","PrimaryAddress":"an address","CalendarId":"the calendar","AppointmentId":"an appointment","MimeContent":"the mime"}',
             },
@@ -171,6 +173,34 @@ describe("Importer", () => {
                 return Promise.resolve({
                     message: "success",
                     errors: [],
+                });
+            };
+
+            new Importer(papiClient, config, amqpConnectionProvider).importAllEvents();
+        });
+
+        it("should requeue all amqp event messages when the batch is finished with at least one error", (done) => {
+            config.maxBatchSize = allEventMessages.length;
+            config.delayBetweenBatchMs = 100;
+            papiClient.importAllICS = () => Promise.resolve([]);
+
+            papiClient.waitForBatchSuccess = () => {
+
+                // Wait more than the 'delayBetweenBatchMs' then assert that acks have been called
+                setTimeout(() => {
+                    allEventMessages.forEach(msg => expect(msg.nack.calledWith(true)).to.be.true);
+                    done();
+                }, config.delayBetweenBatchMs * 3);
+
+                return Promise.resolve({
+                    message: "success",
+                    errors: [{
+                        status: "ERROR",
+                        entityType: "EVENT",
+                        entity: "the given ICS",
+                        operation: "POST",
+                        error: "the error message",
+                    }],
                 });
             };
 
