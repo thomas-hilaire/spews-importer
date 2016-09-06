@@ -13,7 +13,8 @@ export class ImporterFactory {
             amqp: {
                 host: options.amqp_host,
                 queues: {
-                    event: "events",
+                    event: "MIMEImporter",
+                    contact: "DumpedContacts"
                 },
             },
         };
