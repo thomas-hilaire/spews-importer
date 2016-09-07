@@ -1,4 +1,4 @@
-import {DateString, EmailAddress, ICS, UUID} from "./types";
+import {DateString, EmailAddress, ICS, UUID, VCF} from "./types";
 
 export interface EventMessage {
     Id: UUID;
@@ -7,4 +7,13 @@ export interface EventMessage {
     CalendarId: string;
     AppointmentId: string;
     MimeContent: ICS;
+}
+
+export interface ContactMessage {
+    Id: UUID;
+    CreationDate: DateString;
+    PrimaryAddress: EmailAddress;
+    AddressBookId: string;
+    OriginalContactId: string;
+    MimeContent: VCF;
 }
